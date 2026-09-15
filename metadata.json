@@ -1,0 +1,6 @@
+{
+  "name": "Multi‑ZFOC Form Generator",
+  "description": "Multi-sheet ZFOC form generator with instant Excel (.xlsx) and PDF export, interactive AI step-by-step guidance, and dark mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
