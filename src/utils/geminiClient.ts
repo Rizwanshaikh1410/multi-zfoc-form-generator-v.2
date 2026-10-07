@@ -151,7 +151,7 @@ function runSmartLocalFallback(options: GeminiClientOptions): {
   }
 
   // Chat fallback in sweet Hindi
-  let reply = 'नमस्ते! मैं पूजा, आपकी डाइकिन ZFOC AI गाइड हूँ। ZFOC (Zero Free Of Cost) फॉर्म भरने में मैं आपकी पूरी मदद करूँगी। आप ऊपर दिए गए ऑटो-फिल टूल से सीधे कंप्लेंट नोट्स पेस्ट करके फॉर्म भर सकते हैं!';
+  let reply = 'नमस्ते! मैं ओरिया, आपकी डाइकिन ZFOC AI गाइड हूँ। ZFOC (Zero Free Of Cost) फॉर्म भरने में मैं आपकी पूरी मदद करूँगी। आप ऊपर दिए गए ऑटो-फिल टूल से सीधे कंप्लेंट नोट्स पेस्ट करके फॉर्म भर सकते हैं!';
   const lower = prompt.toLowerCase();
   if (lower.includes('zfoc') || lower.includes('kya hai') || lower.includes('what is')) {
     reply = 'ZFOC का मतलब "Zero Free Of Cost" है। जब कोई डाइकिन एसी वारंटी पीरियड में होता है और उसका कोई पार्ट (जैसे PCB, फैन मोटर, कंप्रेसर) डिफेक्टिव हो जाता है, तो फ्री रिप्लेसमेंट पाने के लिए यह ZFOC शीट डाइकिन को सबमिट की जाती है।';

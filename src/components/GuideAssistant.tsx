@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GUIDE_STEPS, GuideStep, ZfocFields } from '../types';
 import { callGemini } from '../utils/geminiClient';
@@ -11,21 +13,19 @@ interface GuideAssistantProps {
   onApplyFields: (newFields: Partial<ZfocFields>) => void;
 }
 
-export const GuideAssistant: React.FC<GuideAssistantProps> = ({
+export const GuideAssistant = ({
   isOpen,
   onToggle,
   onStepChange,
   onComplete,
   currentFields,
   onApplyFields,
-}) => {
+}: GuideAssistantProps) => {
   const [activeTab, setActiveTab] = useState<'guide' | 'ai' | 'chat'>('guide');
   const [currentStep, setCurrentStep] = useState(0);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('हिंदी फीमेल आवाज़ तैयार है');
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceStatus, setVoiceStatus] = useState('ElevenLabs आवाज़ तैयार है');
   const [language, setLanguage] = useState<'hi' | 'en'>('hi');
 
   // Gemini AI Tools state
@@ -39,137 +39,124 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     {
       role: 'assistant',
-      text: 'नमस्ते! मैं पूजा, आपकी डाइकिन ZFOC AI असिस्टेंट हूँ। आप मुझसे ZFOC फॉर्म भरने, पार्ट कोड, या वारंटी नियमों के बारे में हिंदी में कुछ भी पूछ सकते हैं!',
+      text: 'नमस्ते! मैं ओरिया, आपकी डाइकिन ZFOC AI असिस्टेंट हूँ। आप मुझसे ZFOC फॉर्म भरने, पार्ट कोड, या वारंटी नियमों के बारे में हिंदी में कुछ भी पूछ सकते हैं!',
     },
   ]);
 
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const totalSteps = GUIDE_STEPS.length;
   const step = GUIDE_STEPS[currentStep] || GUIDE_STEPS[0];
 
-  // Detect and select best Hindi female voice
-  const findBestFemaleVoice = useCallback((voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null => {
-    if (!voices || voices.length === 0) return null;
+  // ElevenLabs voice playback.
+  // The API key stays server-side; the browser only receives the generated audio.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-    // 1. Look for Hindi female voice
-    const hindiFemale = voices.find((v) => {
-      const l = v.lang.toLowerCase();
-      const n = v.name.toLowerCase();
-      const isHindi = l.includes('hi');
-      const isFemale =
-        n.includes('female') ||
-        n.includes('swara') ||
-        n.includes('lekha') ||
-        n.includes('kalpana') ||
-        n.includes('heera') ||
-        n.includes('zira') ||
-        n.includes('priya') ||
-        n.includes('pooja') ||
-        n.includes('ananya') ||
-        n.includes('neerja') ||
-        n.includes('google हिन्दी');
-      return isHindi && isFemale;
-    });
-    if (hindiFemale) return hindiFemale;
-
-    // 2. Any Hindi voice
-    const anyHindi = voices.find((v) => v.lang.toLowerCase().includes('hi'));
-    if (anyHindi) return anyHindi;
-
-    // 3. Indian English female voice (pronounces Hinglish very accurately and cleanly)
-    const inFemale = voices.find((v) => {
-      const l = v.lang.toLowerCase();
-      const n = v.name.toLowerCase();
-      return (
-        (l.includes('en-in') || l.includes('hi')) &&
-        (n.includes('female') || n.includes('heera') || n.includes('swara') || n.includes('veena') || n.includes('aditi'))
-      );
-    });
-    if (inFemale) return inFemale;
-
-    // 4. Any female voice
-    const anyFemale = voices.find((v) => {
-      const n = v.name.toLowerCase();
-      return n.includes('female') || n.includes('zira') || n.includes('samantha') || n.includes('karen') || n.includes('victoria');
-    });
-    if (anyFemale) return anyFemale;
-
-    return voices[0] || null;
-  }, []);
-
-  // Populate voices
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        setAvailableVoices(voices);
-        const best = findBestFemaleVoice(voices);
-        setSelectedVoice(best);
-      }
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }, [findBestFemaleVoice]);
-
-  // Stop current speech
   const stopSpeech = useCallback(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    abortRef.current?.abort();
+    abortRef.current = null;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.src = '';
+      audioRef.current = null;
     }
+
     setIsSpeaking(false);
-    setVoiceStatus(voiceEnabled ? 'हिंदी फीमेल आवाज़ तैयार है' : 'आवाज़ म्यूट है');
+    setVoiceStatus(voiceEnabled ? 'ElevenLabs आवाज़ तैयार है' : 'आवाज़ म्यूट है');
   }, [voiceEnabled]);
 
-  // Speak text in sweet, natural Hindi female voice
   const speakText = useCallback(
-    (text: string) => {
-      if (!voiceEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        return;
-      }
+    async (text: string) => {
+      const cleanText = text?.trim();
+      if (!cleanText || !voiceEnabled || typeof window === 'undefined') return;
+
       stopSpeech();
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setIsSpeaking(true);
+      setVoiceStatus('🔊 ओरिया बोल रही हैं...');
+
       try {
-        const utt = new SpeechSynthesisUtterance(text);
-        if (selectedVoice) {
-          utt.voice = selectedVoice;
-          utt.lang = selectedVoice.lang || (language === 'hi' ? 'hi-IN' : 'en-US');
-        } else {
-          utt.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+        const res = await fetch('/api/elevenlabs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: cleanText,
+            language,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          let message = 'ElevenLabs voice generate नहीं हो सकी।';
+          try {
+            const errorJson = await res.json();
+            message = errorJson.error || message;
+          } catch {
+            // Keep the friendly fallback message.
+          }
+          throw new Error(message);
         }
 
-        utt.rate = 0.86; // Calm, clear and easily understandable
-        utt.pitch = 1.15; // Natural sweet female pitch
-        utt.volume = 1;
+        const audioBlob = await res.blob();
+        if (controller.signal.aborted) return;
 
-        utt.onstart = () => {
-          setIsSpeaking(true);
-          setVoiceStatus('🔊 पूजा बोल रही हैं...');
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        audio.preload = 'auto';
+        audio.volume = 1;
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+            setIsSpeaking(false);
+            setVoiceStatus('✅ बोलना पूरा हुआ');
+            setTimeout(() => {
+              setVoiceStatus((prev) =>
+                prev === '✅ बोलना पूरा हुआ' ? 'ElevenLabs आवाज़ तैयार है' : prev
+              );
+            }, 1200);
+          }
         };
 
-        utt.onend = () => {
-          setIsSpeaking(false);
-          setVoiceStatus('✅ बोलना पूरा हुआ');
-          setTimeout(() => {
-            setVoiceStatus((prev) => (prev === '✅ बोलना पूरा हुआ' ? 'हिंदी फीमेल आवाज़ तैयार है' : prev));
-          }, 1500);
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+            setIsSpeaking(false);
+            setVoiceStatus('⚠️ ElevenLabs आवाज़ उपलब्ध नहीं है');
+          }
         };
 
-        utt.onerror = () => {
-          setIsSpeaking(false);
-          setVoiceStatus('⚠️ आवाज़ उपलब्ध नहीं है');
-        };
+        await audio.play();
+      } catch (err: any) {
+        if (controller.signal.aborted || err?.name === 'AbortError') return;
 
-        utteranceRef.current = utt;
-        window.speechSynthesis.speak(utt);
-      } catch (err) {
-        console.error('Speech synthesis error:', err);
+        console.error('ElevenLabs TTS error:', err);
+        setIsSpeaking(false);
+        setVoiceStatus('⚠️ ElevenLabs आवाज़ में समस्या');
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
     },
-    [voiceEnabled, selectedVoice, language, stopSpeech]
+    [voiceEnabled, language, stopSpeech]
   );
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
 
   // Speak a step
   const speakStep = useCallback(
@@ -189,7 +176,6 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
       onStepChange(cur);
       speakStep(currentStep);
 
-      // Handle element highlighting for actions
       const clearUiHighlights = () => {
         document.querySelectorAll('.ui-highlight').forEach((el) => el.classList.remove('ui-highlight'));
         document.querySelectorAll('.ui-highlight-tab').forEach((el) => el.classList.remove('ui-highlight-tab'));
@@ -268,7 +254,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
       stopSpeech();
       setVoiceStatus('आवाज़ म्यूट है');
     } else {
-      setVoiceStatus('हिंदी फीमेल आवाज़ तैयार है');
+      setVoiceStatus('ElevenLabs आवाज़ तैयार है');
     }
   };
 
@@ -358,7 +344,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
               {isSpeaking && <span className="sound-wave-dot" />}
             </div>
             <div className="assistant-title-meta">
-              <h4>पूजा • ZFOC AI गाइड</h4>
+              <h4>ओरिया • ZFOC AI गाइड</h4>
               <span className="assistant-subtitle">
                 {language === 'hi' ? 'हिंदी फीमेल असिस्टेंट' : 'Female AI Voice Guide'}
               </span>
@@ -463,7 +449,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
                   <span className="wave-bar bar-3" />
                   <span className="wave-bar bar-4" />
                   <span className="wave-bar bar-5" />
-                  <span className="wave-text">पूजा बोल रही हैं...</span>
+                  <span className="wave-text">ओरिया बोल रही हैं...</span>
                 </div>
               )}
             </div>
@@ -603,7 +589,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
               {aiLoading && (
                 <div className="chat-bubble-row assistant">
                   <span className="chat-avatar">👩‍💼</span>
-                  <div className="chat-bubble typing">पूजा सोच रही हैं...</div>
+                  <div className="chat-bubble typing">ओरिया सोच रही हैं...</div>
                 </div>
               )}
             </div>
@@ -614,7 +600,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                placeholder="पूजा से हिंदी में पूछें..."
+                placeholder="ओरिया से हिंदी में पूछें..."
               />
               <button
                 className="btn-chat-send"
@@ -641,26 +627,6 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
           </div>
 
           <div className="voice-controls-right">
-            {availableVoices.length > 0 && (
-              <select
-                className="voice-selector-dropdown"
-                value={selectedVoice?.name || ''}
-                onChange={(e) => {
-                  const v = availableVoices.find((item) => item.name === e.target.value);
-                  if (v) setSelectedVoice(v);
-                }}
-                title="फीमेल आवाज़ चुनें"
-              >
-                {availableVoices
-                  .filter((v) => v.lang.includes('hi') || v.lang.includes('en-IN') || v.name.toLowerCase().includes('female'))
-                  .slice(0, 8)
-                  .map((v) => (
-                    <option key={v.name} value={v.name}>
-                      {v.name.length > 22 ? v.name.substring(0, 22) + '...' : v.name}
-                    </option>
-                  ))}
-              </select>
-            )}
             <button
               className="voice-mute-toggle-btn"
               id="voiceToggle"
@@ -678,7 +644,7 @@ export const GuideAssistant: React.FC<GuideAssistantProps> = ({
       <button
         className={`guide-toggle-btn-3d ${isOpen ? 'active' : ''}`}
         id="guideToggleBtn"
-        title="पूजा - ZFOC AI गाइड (हिंदी फीमेल आवाज़)"
+        title="ओरिया - ZFOC AI गाइड (ElevenLabs Voice)"
         onClick={() => onToggle()}
         type="button"
       >

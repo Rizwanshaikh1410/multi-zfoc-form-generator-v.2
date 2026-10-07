@@ -70,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
           title="हिंदी AI गाइड प्रारंभ करें (Start Hindi Guide)"
           type="button"
         >
-          <span className="assistant-guide-emoji">👩‍💼</span> पूजा AI गाइड
+          <span className="assistant-guide-emoji">👩‍💼</span> ओरिया AI गाइड
         </button>
       </div>
     </header>

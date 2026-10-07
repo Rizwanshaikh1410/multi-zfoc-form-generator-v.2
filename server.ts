@@ -165,7 +165,7 @@ Provide a strict audit report in friendly Hindi (Hinglish) with:
         contents: prompt || 'Hello',
         config: {
           systemInstruction:
-            'You are Pooja, a friendly, sweet, and highly knowledgeable Daikin ZFOC AI Assistant. You assist Indian HVAC technicians, dealers, and SSD/ASP service engineers in filling Zero Free Of Cost (ZFOC) warranty sheets accurately. Always speak in polite, clear Hindi / Hinglish. Keep answers concise, direct, helpful, and easily understandable.',
+            'You are Oria, a friendly, sweet, and highly knowledgeable Daikin ZFOC AI Assistant. You assist Indian HVAC technicians, dealers, and SSD/ASP service engineers in filling Zero Free Of Cost (ZFOC) warranty sheets accurately. Always speak in polite, clear Hindi / Hinglish. Keep answers concise, direct, helpful, and easily understandable.',
         },
       });
 
@@ -178,6 +178,67 @@ Provide a strict audit report in friendly Hindi (Hinglish) with:
       return res.status(500).json({
         success: false,
         error: err.message || 'Error communicating with Gemini model.',
+      });
+    }
+  });
+
+
+  // ElevenLabs Text-to-Speech route.
+  // Keep ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID server-side.
+  app.post('/api/elevenlabs', async (req, res) => {
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const voiceId = process.env.ELEVENLABS_VOICE_ID;
+
+    if (!apiKey || !voiceId) {
+      return res.status(503).json({
+        success: false,
+        error: 'ElevenLabs is not configured. Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID to the server environment.',
+      });
+    }
+
+    const text = String(req.body?.text || '').trim();
+    if (!text) {
+      return res.status(400).json({ success: false, error: 'Text is required.' });
+    }
+
+    if (text.length > 5000) {
+      return res.status(413).json({ success: false, error: 'Text is too long for one voice request.' });
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            text,
+            model_id: 'eleven_multilingual_v2',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('ElevenLabs error:', response.status, errorText);
+        return res.status(response.status).json({
+          success: false,
+          error: 'ElevenLabs TTS request failed. Check your API key, Voice ID, permissions, and remaining credits.',
+        });
+      }
+
+      const audio = Buffer.from(await response.arrayBuffer());
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(audio);
+    } catch (err: any) {
+      console.error('ElevenLabs TTS error:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Unable to connect to ElevenLabs.',
       });
     }
   });
